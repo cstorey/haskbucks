@@ -36,4 +36,4 @@ spec = parallel $ do
       coffee `shouldBe` Left AlreadyTaken
 
   where
-  runCashierPure history action = (id *** (history++)) $ RWS.evalRWS (action pureCashier) history $ CashierState 0
+  runCashierPure history action = (id *** (history++)) $ RWS.evalRWS (action pureCashier) history ()

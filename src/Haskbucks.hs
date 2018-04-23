@@ -2,7 +2,6 @@
 module Haskbucks where
 
 import Data.IORef
-import Control.Monad.State.Class
 import Control.Monad.Writer.Class
 import Control.Monad.Reader.Class
 
@@ -13,7 +12,7 @@ import Data.Foldable (foldl')
 someFunc :: IO ()
 someFunc = putStrLn "someFunc"
 
-newtype OrderId = OrderId (Int)
+newtype OrderId = OrderId ()
     deriving (Show, Ord, Eq)
 
 data Cup = ACoffee
@@ -36,13 +35,9 @@ data OrderEvent =
   | OrderDelivered
   deriving (Show, Eq)
 
-data CashierState = CashierState {
-  prevOrderId :: Int
-}
-
 newCashier :: IO (CustomerOrder IO)
 newCashier = do
-    ids <- newIORef 0
+    ids <- newIORef ()
     return $ CustomerOrder (doOrder ids) (doTake ids)
 
     where
@@ -56,14 +51,12 @@ data OrderState =
   | OrderCompleted
   deriving (Show)
 
-pureCashier :: (HasCallStack, MonadReader [OrderEvent] m, MonadState CashierState m, MonadWriter [OrderEvent] m) => CustomerOrder m
+pureCashier :: (HasCallStack, MonadReader [OrderEvent] m, MonadWriter [OrderEvent] m) => CustomerOrder m
 pureCashier = CustomerOrder takeOrder takeCoffee
   where
     takeOrder = do
-      order <- OrderId <$> gets prevOrderId
-      modify $ \st -> st { prevOrderId = succ $ prevOrderId st }
       tell [OrderedCoffee]
-      return order
+      return $ OrderId ()
     takeCoffee _ = do
       st <- evalHistory <$> ask
       case st of
