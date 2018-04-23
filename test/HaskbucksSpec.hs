@@ -24,16 +24,19 @@ spec = parallel $ do
       res `shouldBe` Left NotReady
     it "Returns coffee when prepared" $ do
       let (order, hist) = runCashierPure [] $ coOrder
-      let (coffee, _) = runCashierPure (hist ++ [OrderPrepared]) $ flip coTake order
+      let ((), hist') = runBaristaPure hist $ bPrepareDrink
+      let (coffee, _) = runCashierPure hist' $ flip coTake order
       
       coffee `shouldBe` Right ACoffee
 
     it "Cant take coffee twice" $ do
       let (order, hist) = runCashierPure [] $ coOrder
-      let (_, hist') = runCashierPure (hist ++ [OrderPrepared]) $ flip coTake order
-      let (coffee, _) = runCashierPure hist' $ flip coTake order
+      let ((), hist') = runBaristaPure hist $ bPrepareDrink
+      let (_, hist'') = runCashierPure hist' $ flip coTake order
+      let (coffee, _) = runCashierPure hist'' $ flip coTake order
       
       coffee `shouldBe` Left AlreadyTaken
 
   where
   runCashierPure history action = (id *** (history++)) $ RWS.evalRWS (action pureCashier) history ()
+  runBaristaPure history action = (id *** (history++)) $ RWS.evalRWS (action pureBarista) history $ ()

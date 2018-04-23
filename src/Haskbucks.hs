@@ -23,9 +23,13 @@ data CoffeeError =
   | AlreadyTaken
   deriving (Show, Eq)
 
-data CustomerOrder f = CustomerOrder {
+data CustomerOps f = CustomerOps {
     coOrder :: f OrderId
 ,   coTake :: OrderId -> f (Either CoffeeError Cup)
+}
+
+data BaristaOps f = BaristaOps {
+  bPrepareDrink :: f ()
 }
 
 
@@ -35,10 +39,10 @@ data OrderEvent =
   | OrderDelivered
   deriving (Show, Eq)
 
-newCashier :: IO (CustomerOrder IO)
+newCashier :: IO (CustomerOps IO)
 newCashier = do
     ids <- newIORef ()
-    return $ CustomerOrder (doOrder ids) (doTake ids)
+    return $ CustomerOps (doOrder ids) (doTake ids)
 
     where
         doOrder ids = OrderId <$> atomicModifyIORef ids (\i -> (succ i, succ i))
@@ -51,14 +55,14 @@ data OrderState =
   | OrderCompleted
   deriving (Show)
 
-pureCashier :: (HasCallStack, MonadReader [OrderEvent] m, MonadWriter [OrderEvent] m) => CustomerOrder m
-pureCashier = CustomerOrder takeOrder takeCoffee
+pureCashier :: (HasCallStack, MonadReader [OrderEvent] m, MonadWriter [OrderEvent] m) => CustomerOps m
+pureCashier = CustomerOps takeOrder takeCoffee
   where
     takeOrder = do
       tell [OrderedCoffee]
       return $ OrderId ()
     takeCoffee _ = do
-      st <- evalHistory <$> ask
+      st <- evalOrderHistory <$> ask
       case st of
         OrderReady -> do
           tell [OrderDelivered]
@@ -66,10 +70,24 @@ pureCashier = CustomerOrder takeOrder takeCoffee
         OrderCompleted -> return $ Left AlreadyTaken
         _ -> return $ Left NotReady
 
-    evalHistory :: [OrderEvent] -> OrderState
-    evalHistory = foldl' applyEvent OrderStart 
-    applyEvent :: OrderState -> OrderEvent -> OrderState
-    applyEvent OrderStart OrderedCoffee = OrderAccepted
-    applyEvent OrderAccepted OrderPrepared = OrderReady
-    applyEvent OrderReady OrderDelivered = OrderCompleted
-    applyEvent st _ev = st -- error $ "applyEvent: " ++ show (st, ev)
+evalOrderHistory :: [OrderEvent] -> OrderState
+evalOrderHistory = foldl' applyOrderEvent OrderStart 
+  where
+  applyOrderEvent :: OrderState -> OrderEvent -> OrderState
+  applyOrderEvent OrderStart OrderedCoffee = OrderAccepted
+  applyOrderEvent OrderAccepted OrderPrepared = OrderReady
+  applyOrderEvent OrderReady OrderDelivered = OrderCompleted
+  applyOrderEvent st _ev = st
+
+
+pureBarista :: (HasCallStack, MonadReader [OrderEvent] m, MonadWriter [OrderEvent] m) => BaristaOps m
+pureBarista = BaristaOps prepareDrink
+  where
+    prepareDrink = do
+      st <- evalOrderHistory <$> ask
+      case st of
+        OrderAccepted -> do
+          tell [OrderPrepared]
+        _ -> pure ()
+
+     
