@@ -1,9 +1,8 @@
 {-# LANGUAGE FlexibleContexts #-}
+{-# LANGUAGE MultiParamTypeClasses #-}
 module Haskbucks where
 
 import Data.IORef
-import Control.Monad.Writer.Class
-import Control.Monad.Reader.Class
 
 import GHC.Stack
 
@@ -17,6 +16,10 @@ newtype OrderId = OrderId ()
 
 data Cup = ACoffee
   deriving (Show, Eq)
+
+class Monad m => (MonadEvents e) m where
+  history :: m [e]
+  append :: e -> m ()
 
 data CoffeeError =
     NotReady
@@ -55,17 +58,17 @@ data OrderState =
   | OrderCompleted
   deriving (Show)
 
-pureCashier :: (HasCallStack, MonadReader [OrderEvent] m, MonadWriter [OrderEvent] m) => CustomerOps m
+pureCashier :: (HasCallStack, MonadEvents OrderEvent m) => CustomerOps m
 pureCashier = CustomerOps takeOrder takeCoffee
   where
     takeOrder = do
-      tell [OrderedCoffee]
+      append OrderedCoffee
       return $ OrderId ()
     takeCoffee _ = do
-      st <- evalOrderHistory <$> ask
+      st <- evalOrderHistory <$> history
       case st of
         OrderReady -> do
-          tell [OrderDelivered]
+          append OrderDelivered
           return $ Right ACoffee
         OrderCompleted -> return $ Left AlreadyTaken
         _ -> return $ Left NotReady
@@ -80,14 +83,14 @@ evalOrderHistory = foldl' applyOrderEvent OrderStart
   applyOrderEvent st _ev = st
 
 
-pureBarista :: (HasCallStack, MonadReader [OrderEvent] m, MonadWriter [OrderEvent] m) => BaristaOps m
+pureBarista :: (HasCallStack, MonadEvents OrderEvent m) => BaristaOps m
 pureBarista = BaristaOps prepareDrink
   where
     prepareDrink = do
-      st <- evalOrderHistory <$> ask
+      st <- evalOrderHistory <$> history
       case st of
         OrderAccepted -> do
-          tell [OrderPrepared]
+          append OrderPrepared
         _ -> pure ()
 
      
