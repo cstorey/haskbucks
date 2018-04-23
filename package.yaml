@@ -21,12 +21,13 @@ description:         Please see the README on Github at <https://github.com/gith
 
 dependencies:
 - base >= 4.7 && < 5
+- mtl
 
 library:
   source-dirs: src
 
 executables:
-  haskbucks-exe:
+  haskbucks:
     main:                Main.hs
     source-dirs:         app
     ghc-options:
@@ -46,3 +47,5 @@ tests:
     - -with-rtsopts=-N
     dependencies:
     - haskbucks
+    - hspec
+    - hspec-discover
