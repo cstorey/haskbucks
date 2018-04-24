@@ -10,35 +10,38 @@ import           Control.Monad.State.Strict (MonadState, State)
 
 spec :: Spec
 spec = parallel $ do
-  describe "Pure" $ cashierContract stateLogger runState
+  describe "Pure" $ around withStateEvents $ cashierContract runState
   where
-  cashierContract :: Monad m => EventLog OrderEvent m -> (forall a . m a -> IO (a, [OrderEvent])) -> Spec
-  cashierContract events run = do
-    let cashier = pureCashier events
-    let barista = pureBarista events
-
-    it "Records that an order has occurred" $ do
+  cashierContract :: Monad m => (forall a . m a -> IO (a, [OrderEvent])) -> SpecWith (EventLog OrderEvent m)
+  cashierContract run = do
+    it "Records that an order has occurred" $ \events -> do
       (_, logs) <- run $ do
+           let cashier = pureCashier events
            coOrder cashier
 
       logs `shouldContain` [OrderedCoffee]
 
-    it "Disallows taking by default" $ do
+    it "Disallows taking by default" $ \events -> do
       (res, _) <- run $ do
+            let cashier = pureCashier events
             order <- coOrder cashier
             coTake cashier order
 
       res `shouldBe` Left NotReady
-    it "Returns coffee when prepared" $ do
+    it "Returns coffee when prepared" $ \events -> do
       (coffee, _) <- run $ do
+            let cashier = pureCashier events
+            let barista = pureBarista events
             order <- coOrder cashier
             bPrepareDrink barista order
             coTake cashier order
 
       coffee `shouldBe` Right ACoffee
 
-    it "Cant take coffee twice" $ do
+    it "Cant take coffee twice" $ \events -> do
       (coffee, _) <- run $ do
+            let cashier = pureCashier events
+            let barista = pureBarista events
             order <- coOrder cashier
             bPrepareDrink barista order
             _ <- coTake cashier order
@@ -53,3 +56,7 @@ spec = parallel $ do
     where
     getter = State.get
     writer ev = State.modify $ (++ [ev])
+
+  withStateEvents :: (EventLog OrderEvent (State [OrderEvent]) -> IO a) -> IO a
+  withStateEvents f = do
+    f stateLogger
