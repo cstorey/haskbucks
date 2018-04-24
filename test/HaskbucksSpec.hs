@@ -11,15 +11,16 @@ import           Control.Concurrent.STM (STM)
 import qualified Control.Concurrent.STM as STM
 
 
-cashierContract :: Monad m => (forall a . m a -> IO a) -> SpecWith (EventLog OrderEvent m)
+cashierContract :: Monad m => (forall a . m a -> IO a) -> SpecWith (EventLog (OrderId, OrderEvent) m)
 cashierContract run = do
   it "Records that an order has occurred" $ \events -> do
-    logs <- run $ do
-         let cashier = pureCashier events
-         coOrder cashier
-         history events
+    (o, logs) <- run $ do
+          let cashier = pureCashier events
+          o <- coOrder cashier
+          h <- history events
+          return (o, h)
 
-    logs `shouldContain` [OrderedCoffee]
+    logs `shouldContain` [(o, OrderedCoffee)]
 
   it "Disallows taking by default" $ \events -> do
     res <- run $ do
@@ -48,6 +49,21 @@ cashierContract run = do
           coTake cashier order
 
     coffee `shouldBe` Left AlreadyTaken
+
+  it "Can order multiple drinks" $ \events -> do
+    coffees <- run $ do
+          let cashier = pureCashier events
+          let barista = pureBarista events
+          o0 <- coOrder cashier
+          bPrepareDrink barista o0
+          c0 <- coTake cashier o0
+          o1 <- coOrder cashier
+          bPrepareDrink barista o1
+          c1 <- coTake cashier o1
+          return $ sequence [c0, c1]
+
+    coffees `shouldBe` Right [ACoffee, ACoffee]
+
 
 logContract :: Monad m => (forall a . m a -> IO a) -> SpecWith (EventLog String m)
 logContract run = do
@@ -81,7 +97,6 @@ withStateEvents f = do
 
 runStm :: STM a -> IO a
 runStm = STM.atomically
-
 
 withStmEvents :: (EventLog ev STM -> IO a) -> IO a
 withStmEvents f = do
