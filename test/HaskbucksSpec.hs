@@ -49,9 +49,27 @@ cashierContract run = do
 
     coffee `shouldBe` Left AlreadyTaken
 
+logContract :: Monad m => (forall a . m a -> IO a) -> SpecWith (EventLog String m)
+logContract run = do
+  it "Starts off empty" $ \events -> do
+    ev <- run $ history events
+    ev `shouldBe` []
+  it "Adding an item" $ \events -> do
+    ev <- run $ do
+      append events "a"
+      history events
+    ev `shouldBe` ["a"]
+  it "Adding two items" $ \events -> do
+    ev <- run $ do
+      append events "a"
+      append events "b"
+      history events
+    ev `shouldBe` ["a", "b"]
+
 runState :: State [ev] a -> IO a
 runState = pure . flip State.evalState []
-withStateEvents :: (EventLog OrderEvent (State [OrderEvent]) -> IO a) -> IO a
+
+withStateEvents :: (EventLog ev (State [ev]) -> IO a) -> IO a
 withStateEvents f = do
   f stateLogger
   where
@@ -81,5 +99,9 @@ withStmEvents f = do
 
 spec :: Spec
 spec = parallel $ do
-  describe "Pure" $ around withStateEvents $ cashierContract runState
-  describe "STM" $ around withStmEvents $ cashierContract runStm
+  describe "EventLog" $ do
+    describe "Pure" $ around withStateEvents $ logContract runState
+    describe "STM" $ around withStmEvents $ logContract runStm
+  describe "Coffee" $ do
+    describe "Pure" $ around withStateEvents $ cashierContract runState
+    describe "STM" $ around withStmEvents $ cashierContract runStm
