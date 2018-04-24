@@ -17,9 +17,10 @@ newtype OrderId = OrderId ()
 data Cup = ACoffee
   deriving (Show, Eq)
 
-class Monad m => (MonadEvents e) m where
-  history :: m [e]
-  append :: e -> m ()
+data EventLog ev m = EventLog {
+  history :: m [ev]
+, append :: ev -> m ()
+}
 
 data CoffeeError =
     NotReady
@@ -32,9 +33,8 @@ data CustomerOps f = CustomerOps {
 }
 
 data BaristaOps f = BaristaOps {
-  bPrepareDrink :: f ()
+  bPrepareDrink :: OrderId -> f ()
 }
-
 
 data OrderEvent =
     OrderedCoffee
@@ -51,30 +51,30 @@ newCashier = do
         doOrder ids = OrderId <$> atomicModifyIORef ids (\i -> (succ i, succ i))
         doTake _ _id = return $ Right ACoffee
 
-data OrderState = 
+data OrderState =
     OrderStart
   | OrderAccepted
   | OrderReady
   | OrderCompleted
   deriving (Show)
 
-pureCashier :: (HasCallStack, MonadEvents OrderEvent m) => CustomerOps m
-pureCashier = CustomerOps takeOrder takeCoffee
+pureCashier :: (HasCallStack, Monad m) => EventLog OrderEvent m -> CustomerOps m
+pureCashier events = CustomerOps takeOrder takeCoffee
   where
     takeOrder = do
-      append OrderedCoffee
+      append events OrderedCoffee
       return $ OrderId ()
     takeCoffee _ = do
-      st <- evalOrderHistory <$> history
+      st <- evalOrderHistory <$> history events
       case st of
         OrderReady -> do
-          append OrderDelivered
+          append events OrderDelivered
           return $ Right ACoffee
         OrderCompleted -> return $ Left AlreadyTaken
         _ -> return $ Left NotReady
 
 evalOrderHistory :: [OrderEvent] -> OrderState
-evalOrderHistory = foldl' applyOrderEvent OrderStart 
+evalOrderHistory = foldl' applyOrderEvent OrderStart
   where
   applyOrderEvent :: OrderState -> OrderEvent -> OrderState
   applyOrderEvent OrderStart OrderedCoffee = OrderAccepted
@@ -83,14 +83,12 @@ evalOrderHistory = foldl' applyOrderEvent OrderStart
   applyOrderEvent st _ev = st
 
 
-pureBarista :: (HasCallStack, MonadEvents OrderEvent m) => BaristaOps m
-pureBarista = BaristaOps prepareDrink
+pureBarista :: (HasCallStack, Monad m) => EventLog OrderEvent m -> BaristaOps m
+pureBarista events = BaristaOps prepareDrink
   where
-    prepareDrink = do
-      st <- evalOrderHistory <$> history
+    prepareDrink _order = do
+      st <- evalOrderHistory <$> history events
       case st of
         OrderAccepted -> do
-          append OrderPrepared
+          append events OrderPrepared
         _ -> pure ()
-
-     
