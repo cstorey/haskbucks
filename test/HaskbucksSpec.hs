@@ -1,5 +1,6 @@
 {-# LANGUAGE FlexibleContexts #-}
 {-# LANGUAGE RankNTypes #-}
+{-# LANGUAGE LambdaCase #-}
 
 module HaskbucksSpec (spec) where
 
@@ -9,8 +10,11 @@ import qualified Control.Monad.State.Strict as State
 import           Control.Monad.State.Strict (MonadState, State)
 import           Control.Concurrent.STM (STM)
 import qualified Control.Concurrent.STM as STM
+import qualified Data.Map.Strict as Map
 import Control.Concurrent.Async
+import Control.Monad
 import System.Timeout
+-- import Debug.Trace
 
 
 cashierContract :: Monad m => (forall a . m a -> IO a) -> SpecWith (EventLog (OrderId, OrderEvent) m)
@@ -85,31 +89,32 @@ logContract run = do
     ev `shouldBe` ["a", "b"]
 
 
--- Need to full out log tailer / process manager plumbing goop for this to work.
-
--- observe: State -> Event -> State (left fold)
--- Observe needs to
--- execute: Monad m => SomeCommandOps m -> EventLog ev m -> State -> m a
-
--- Process manager needs to record private events / state, too. Might end up
--- needing polymorphic observe (or just observe over sums)
-
 smokeTest :: Spec
 smokeTest = do
   describe "Async baristas" $ around withStmEvents $ do
-    it "should ... somethijng?" $ \events -> do
-      withAsync runABarista $ \a -> do
+    it "should prepare drinks asynchronously" $ \events -> do
+      res <- withAsync (runStm $ runABarista events) $ \a -> do
         link a
         let cashier = pureCashier events
-        order <- runStm $ coOrder cashier
         timeout 1000 $ do
+          order <- runStm $ coOrder cashier
+          runStm $ do
+            r <- coTake cashier order
+            case r of
+              Left NotReady -> STM.retry
+              _ -> return r
 
-
-      False `shouldBe` True
+      res `shouldBe` Just (Right ACoffee)
 
   where
-  runABarista = error "barista...?"
-
+  runABarista events = do
+    let barista = pureBarista events
+    st <- evalOrderHistory <$> history events
+    let toServe = Map.filter (\case OrderAccepted -> True; _ -> False) st
+    if Map.null toServe
+    then STM.retry
+    else forM_ (Map.toList toServe) $ \(orderId, _) -> do
+        bPrepareDrink barista orderId
 
 runState :: State [ev] a -> IO a
 runState = pure . flip State.evalState []
