@@ -1,13 +1,16 @@
 {-# LANGUAGE FlexibleContexts #-}
 {-# LANGUAGE GeneralizedNewtypeDeriving #-}
 {-# LANGUAGE ScopedTypeVariables #-}
+{-# LANGUAGE DeriveGeneric #-}
 module Haskbucks where
 
 import Data.IORef
 import Data.Map.Strict (Map)
 import qualified Data.Map.Strict as Map
+import qualified Data.Aeson as JSON
 
 import GHC.Stack
+import GHC.Generics
 
 import Data.Foldable (foldl')
 
@@ -15,7 +18,10 @@ someFunc :: IO ()
 someFunc = putStrLn "someFunc"
 
 newtype OrderId = OrderId Int
-    deriving (Show, Ord, Eq, Enum)
+    deriving (Show, Ord, Eq, Enum, Generic)
+
+instance JSON.FromJSON OrderId
+instance JSON.ToJSON OrderId
 
 data Cup = ACoffee
   deriving (Show, Eq)
@@ -43,7 +49,9 @@ data OrderEvent =
     OrderedCoffee
   | OrderPrepared
   | OrderDelivered
-  deriving (Show, Eq)
+  deriving (Show, Eq, Generic)
+instance JSON.FromJSON OrderEvent
+instance JSON.ToJSON OrderEvent
 
 newCashier :: IO (CustomerOps IO)
 newCashier = do
