@@ -4,7 +4,6 @@
 
 module Haskbucks.Event
 ( EventLog(..)
-, history
 , runState
 , withStateEvents
 , runStm
@@ -15,7 +14,7 @@ module Haskbucks.Event
 ) where
 
 import qualified Control.Monad.State.Strict as State
-import           Control.Monad.State.Strict (State)
+import           Control.Monad.State.Strict (MonadState, State)
 import           Control.Concurrent.STM (STM)
 import qualified Control.Concurrent.STM as STM
 
@@ -32,19 +31,13 @@ import Data.Hashable (hash)
 import Control.Monad
 import Control.Exception (bracket)
 
-newtype Stamp = Stamp { unStamp :: Int }
-  deriving (Show, Ord, Eq, Bounded)
-
 data EventLog ev m = EventLog {
-  historySince :: Maybe Stamp -> m [(Stamp, ev)]
+  history :: m [ev]
 , append :: ev -> m ()
 }
 
-history :: Monad m => EventLog ev m -> m [ev]
-history evs = fmap snd <$> historySince evs Nothing
-
 data PgLogItem ev = PgLogItem {
-  lId :: Int,
+  _lId :: Integer,
   lValue :: ev
 } deriving (Show, Typeable)
 
@@ -59,13 +52,10 @@ withStateEvents :: (EventLog ev (State [ev]) -> IO a) -> IO a
 withStateEvents f = do
   f stateLogger
   where
-  stateLogger :: EventLog a (State [a])
+  stateLogger :: MonadState [a] m => EventLog a m
   stateLogger = EventLog getter writer
     where
-    getter since = do
-      evs <- zip (map Stamp [0..]) <$> State.get
-      pure $ drop (maybe 0 (succ . unStamp) since) evs
-
+    getter = State.get
     writer ev = State.modify $ (++ [ev])
 
 runStm :: STM a -> IO a
@@ -80,9 +70,7 @@ withStmEvents f = do
   newStmEvents = do
     evVar <- STM.newTVar []
 
-    let getter since = do
-                        evs <- zip (map Stamp [0..]) <$> STM.readTVar evVar
-                        pure $ drop (maybe 0 (succ . unStamp) since) evs
+    let getter = STM.readTVar evVar
     let writer ev = STM.modifyTVar' evVar (++ [ev])
 
     pure $ EventLog getter writer
@@ -106,10 +94,9 @@ newPgEvents pool = do
   Pool.withResource pool $ setupDb
   pure $ EventLog getter writer
   where
-  getter since = Pool.withResource pool $ \c -> do
-      let sid = fmap unStamp since
-      rows <- Pg.query c "select * from coffee_logs where ? is null or id > ?" (sid, sid)
-      pure $ fmap (\r -> (Stamp $ lId r, lValue r)) rows
+  getter = Pool.withResource pool $ \c -> do
+      rows <- Pg.query_ c "select * from coffee_logs"
+      pure $ fmap lValue rows
 
   writer ev = Pool.withResource pool $ \c -> do
     _ <- Pg.execute c "insert into coffee_logs (value) values (?);" $ Pg.Only (Pg.toJSONField ev)
