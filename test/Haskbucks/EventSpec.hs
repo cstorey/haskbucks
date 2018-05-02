@@ -1,7 +1,6 @@
 {-# LANGUAGE FlexibleContexts #-}
 {-# LANGUAGE RankNTypes #-}
 {-# LANGUAGE LambdaCase #-}
-{-# LANGUAGE OverloadedStrings #-}
 {-# LANGUAGE ScopedTypeVariables #-}
 
 module Haskbucks.EventSpec (spec) where
@@ -9,6 +8,7 @@ module Haskbucks.EventSpec (spec) where
 import           Test.Hspec
 import           Haskbucks.Event
 import           Haskbucks.Junk
+import           Data.Semigroup
 
 -- import Debug.Trace
 
@@ -28,6 +28,22 @@ logContract run = do
       append events "b"
       history events
     ev `shouldBe` ["a", "b"]
+
+  it "Adding two items" $ \events -> do
+    ev <- run $ do
+      append events "a"
+      append events "b"
+      history events
+    ev `shouldBe` ["a", "b"]
+
+  it "Should allow pulling events since 'X'" $ \events -> do
+    evs <- run $ do
+      append events "a"
+      maxId <- getMax <$> foldMap (Max . fst) <$> historySince events Nothing
+      append events "b"
+      evs <- historySince events $ Just maxId
+      pure $ fmap snd evs
+    evs `shouldBe` ["b"]
 
 spec :: Spec
 spec = do
