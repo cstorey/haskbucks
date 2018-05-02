@@ -8,9 +8,7 @@ module Haskbucks.EventSpec (spec) where
 import           Test.Hspec
 import           Haskbucks.Event
 import           Haskbucks.Junk
-import           Data.Semigroup
-
--- import Debug.Trace
+import           Data.Monoid
 
 logContract :: Monad m => (forall a . m a -> IO a) -> SpecWith (EventLog String m)
 logContract run = do
@@ -39,11 +37,21 @@ logContract run = do
   it "Should allow pulling events since 'X'" $ \events -> do
     evs <- run $ do
       append events "a"
-      maxId <- getMax <$> foldMap (Max . fst) <$> historySince events Nothing
+      maxId <- getLast <$> foldMap (Last . Just . fst) <$> historySince events Nothing
       append events "b"
-      evs <- historySince events $ Just maxId
+      evs <- historySince events $ maxId
       pure $ fmap snd evs
     evs `shouldBe` ["b"]
+
+  it "Should allow pulling events since max of empty history" $ \events -> do
+    evs <- run $ do
+      maxId <- getLast <$> foldMap (Last . Just . fst) <$> historySince events Nothing
+      append events "b"
+      evs <- historySince events $ maxId
+      pure $ fmap snd evs
+    evs `shouldBe` ["b"]
+
+
 
 spec :: Spec
 spec = do
