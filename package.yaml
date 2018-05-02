@@ -25,6 +25,12 @@ dependencies:
 - stm
 - containers
 - async
+- bytestring
+- unix
+- resource-pool
+- postgresql-simple
+- aeson
+- hashable
 
 library:
   source-dirs: src
