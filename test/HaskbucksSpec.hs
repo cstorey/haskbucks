@@ -32,7 +32,6 @@ import Control.Monad
 import System.Timeout
 -- import Debug.Trace
 
-
 cashierContract :: Monad m => (forall a . m a -> IO a) -> SpecWith (EventLog (OrderId, OrderEvent) m)
 cashierContract run = do
   it "Records that an order has occurred" $ \events -> do
@@ -105,22 +104,21 @@ logContract run = do
     ev `shouldBe` ["a", "b"]
 
 
-smokeTest :: Spec
-smokeTest = do
-  describe "Async baristas" $ around withStmEvents $ do
-    it "should prepare drinks asynchronously" $ \events -> do
-      res <- withAsync (runStm $ runABarista events) $ \a -> do
-        link a
-        let cashier = pureCashier events
-        timeout 1000 $ do
-          order <- runStm $ coOrder cashier
-          runStm $ do
-            r <- coTake cashier order
-            case r of
-              Left NotReady -> STM.retry
-              _ -> return r
+smokeTest ::  Monad m => (forall z . m z) -> (forall a . m a -> IO a) -> SpecWith (EventLog (OrderId, OrderEvent) m)
+smokeTest retry run = do
+  it "should prepare drinks asynchronously" $ \events -> do
+    res <- withAsync (run $ runABarista events) $ \a -> do
+      link a
+      let cashier = pureCashier events
+      timeout 1000 $ do
+        order <- run $ coOrder cashier
+        run $ do
+          r <- coTake cashier order
+          case r of
+            Left NotReady -> retry
+            _ -> return r
 
-      res `shouldBe` Just (Right ACoffee)
+    res `shouldBe` Just (Right ACoffee)
 
   where
   runABarista events = do
@@ -128,7 +126,7 @@ smokeTest = do
     st <- evalOrderHistory <$> history events
     let toServe = Map.filter (\case OrderAccepted -> True; _ -> False) st
     if Map.null toServe
-    then STM.retry
+    then retry
     else forM_ (Map.toList toServe) $ \(orderId, _) -> do
         bPrepareDrink barista orderId
 
@@ -226,4 +224,4 @@ spec = do
     describe "STM" $ around withStmEvents $ cashierContract runStm
     describe "Pg" $ around withPgEvents $ cashierContract runPg
   describe "Smoke" $ do
-    smokeTest
+    describe "STM" $ around withStmEvents $ smokeTest STM.retry runStm
