@@ -32,7 +32,7 @@ import Control.Monad
 import Control.Exception (bracket)
 
 data EventLog ev m = EventLog {
-  history :: m [ev]
+  snapshot :: m [ev]
 , append :: ev -> m ()
 }
 

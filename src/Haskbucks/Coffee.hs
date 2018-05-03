@@ -56,11 +56,11 @@ pureCashier :: forall m . (HasCallStack, Monad m) => EventLog (OrderId, OrderEve
 pureCashier events = CustomerOps takeOrder takeCoffee
   where
     takeOrder = do
-      newId <- maybe (OrderId 0) (succ . fst) . Map.lookupMax . evalOrderHistory <$> history events
+      newId <- maybe (OrderId 0) (succ . fst) . Map.lookupMax . evalOrderHistory <$> snapshot events
       append events (newId, OrderedCoffee)
       return newId
     takeCoffee orderId = do
-      st <- evalOrderHistory <$> history events
+      st <- evalOrderHistory <$> snapshot events
       case Map.lookup orderId st of
         Just OrderReady -> do
           append events (orderId, OrderDelivered)
@@ -90,7 +90,7 @@ pureBarista :: (HasCallStack, Monad m) => EventLog (OrderId, OrderEvent) m -> Ba
 pureBarista events = BaristaOps prepareDrink
   where
     prepareDrink order = do
-      st <- evalOrderHistory <$> history events
+      st <- evalOrderHistory <$> snapshot events
       case Map.lookup order st  of
         Just OrderAccepted -> do
           append events (order, OrderPrepared)

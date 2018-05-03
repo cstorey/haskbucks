@@ -22,7 +22,7 @@ cashierContract run = do
     (o, logs) <- run $ do
           let cashier = pureCashier events
           o <- coOrder cashier
-          h <- history events
+          h <- snapshot events
           return (o, h)
 
     logs `shouldContain` [(o, OrderedCoffee)]
@@ -89,7 +89,7 @@ smokeTest retry run = do
   where
   runABarista events = do
     let barista = pureBarista events
-    st <- evalOrderHistory <$> history events
+    st <- evalOrderHistory <$> snapshot events
     let toServe = Map.filter (\case OrderAccepted -> True; _ -> False) st
     if Map.null toServe
     then retry

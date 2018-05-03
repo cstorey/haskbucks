@@ -15,18 +15,18 @@ import           Haskbucks.Junk
 logContract :: Monad m => (forall a . m a -> IO a) -> SpecWith (EventLog String m)
 logContract run = do
   it "Starts off empty" $ \events -> do
-    ev <- run $ history events
+    ev <- run $ snapshot events
     ev `shouldBe` []
   it "Adding an item" $ \events -> do
     ev <- run $ do
       append events "a"
-      history events
+      snapshot events
     ev `shouldBe` ["a"]
   it "Adding two items" $ \events -> do
     ev <- run $ do
       append events "a"
       append events "b"
-      history events
+      snapshot events
     ev `shouldBe` ["a", "b"]
 
 spec :: Spec
