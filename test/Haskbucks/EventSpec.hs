@@ -9,6 +9,7 @@ module Haskbucks.EventSpec (spec) where
 import           Test.Hspec
 import           Haskbucks.Event
 import           Haskbucks.Junk
+import qualified Streaming.Prelude as S
 
 -- import Debug.Trace
 
@@ -28,6 +29,16 @@ logContract run = do
       append events "b"
       snapshot events
     ev `shouldBe` ["a", "b"]
+
+  it "Stream returns same as snapshot" $ \events -> do
+    (h, s) <- run $ do
+      append events "a"
+      append events "b"
+      h <- snapshot events
+      s <- S.toList_ $ S.take 2 $ stream events 
+      pure (h, s)
+    s `shouldBe` h
+
 
 spec :: Spec
 spec = do

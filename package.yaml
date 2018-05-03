@@ -31,6 +31,8 @@ dependencies:
 - postgresql-simple
 - aeson
 - hashable
+- streaming
+- resourcet
 
 library:
   source-dirs: src
