@@ -53,9 +53,9 @@ withStateEvents f = do
   f stateLogger
   where
   stateLogger :: MonadState [a] m => EventLog a m
-  stateLogger = EventLog getter writer
+  stateLogger = EventLog getSnapshot writer
     where
-    getter = State.get
+    getSnapshot = State.get
     writer ev = State.modify $ (++ [ev])
 
 runStm :: STM a -> IO a
@@ -70,10 +70,10 @@ withStmEvents f = do
   newStmEvents = do
     evVar <- STM.newTVar []
 
-    let getter = STM.readTVar evVar
+    let getSnapshot = STM.readTVar evVar
     let writer ev = STM.modifyTVar' evVar (++ [ev])
 
-    pure $ EventLog getter writer
+    pure $ EventLog getSnapshot writer
 
 
 withPgEvents :: (Typeable ev, JSON.ToJSON ev, JSON.FromJSON ev) => ByteString -> (EventLog ev IO -> IO ()) -> IO ()
@@ -92,9 +92,9 @@ newPgPool url = do
 newPgEvents :: forall ev . (Typeable ev, JSON.ToJSON ev, JSON.FromJSON ev) => Pool Pg.Connection -> IO (EventLog ev IO)
 newPgEvents pool = do
   Pool.withResource pool $ setupDb
-  pure $ EventLog getter writer
+  pure $ EventLog getSnapshot writer
   where
-  getter = Pool.withResource pool $ \c -> do
+  getSnapshot = Pool.withResource pool $ \c -> do
       rows <- Pg.query_ c "select * from coffee_logs"
       pure $ fmap lValue rows
 
