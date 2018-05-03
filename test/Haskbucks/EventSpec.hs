@@ -41,7 +41,7 @@ logContract run = do
 
 
 spec :: Spec
-spec = do
+spec = parallel $ do
   describe "EventLog" $ do
     describe "Pure" $ around withStateEvents $ logContract runState
     describe "STM" $ around withStmEvents $ logContract runStm
