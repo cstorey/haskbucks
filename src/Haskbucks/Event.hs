@@ -147,7 +147,17 @@ newPgEvents pool = do
 dropPgEvents :: Pool Pg.Connection -> IO ()
 dropPgEvents pool = do
   Pool.withResource pool $ \c -> do
-    void $ Pg.execute_ c "DROP TABLE IF EXISTS coffee_logs;"
+    void $ Pg.execute_ c cleanup
+  where
+  cleanup = "DO $$\n\
+            \  DECLARE r record;\n\
+            \BEGIN\n\
+            \  FOR r IN SELECT table_schema, table_name FROM information_schema.tables\n\
+            \    WHERE table_type = 'BASE TABLE' AND table_schema = 'public' AND table_name = 'coffee_logs'\n\
+            \  LOOP\n\
+            \    EXECUTE 'TRUNCATE TABLE ' || quote_ident(r.table_schema) || '.' || quote_ident(r.table_name);\n\
+            \  END LOOP;\n\
+            \END\n$$;"
 
 runPg :: RIO a -> IO a
 runPg = runResourceT
