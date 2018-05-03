@@ -15,4 +15,7 @@ withPgFromEnv f = do
   pgUrl <- Env.getEnv $  Char8.pack "PG_URL"
   case pgUrl of
     Nothing -> do pendingWith "No $PG_URL specified"
-    Just url -> withPgEvents url f
+    Just url -> do
+     withPgPool url $ \pool -> do
+      dropPgEvents pool
+      withPgEvents pool f

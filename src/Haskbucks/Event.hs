@@ -10,6 +10,7 @@ module Haskbucks.Event
 , runStm
 , withStmEvents
 , runPg
+, withPgPool
 , withPgEvents
 , dropPgEvents
 ) where
@@ -99,13 +100,13 @@ withStmEvents f = do
 
 
 type RIO = (ResourceT IO)
-withPgEvents :: (Typeable ev, JSON.ToJSON ev, JSON.FromJSON ev) => ByteString -> (EventLog ev RIO -> IO ()) -> IO ()
-withPgEvents url f = do
+withPgPool :: ByteString -> (Pool Pg.Connection -> IO a) -> IO a
+withPgPool url = bracket (newPgPool url) (Pool.destroyAllResources)
 
-      bracket (newPgPool url) (Pool.destroyAllResources) $ \pool -> do
-        dropPgEvents pool
-        evs <- newPgEvents pool
-        f $ evs
+withPgEvents :: (Typeable ev, JSON.ToJSON ev, JSON.FromJSON ev) => Pool Pg.Connection -> (EventLog ev RIO -> IO ()) -> IO ()
+withPgEvents pool f = do
+    evs <- newPgEvents pool
+    f $ evs
 
 newPgPool :: ByteString -> IO (Pool Pg.Connection)
 newPgPool url = do
