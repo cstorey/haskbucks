@@ -163,9 +163,14 @@ newPgEvents pool = do
       void $ Pg.execute_ c "CREATE TABLE IF NOT EXISTS coffee_logs (id serial primary key, value jsonb);"
 
   borrowConn :: RIO (ReleaseKey, Pg.Connection)
-  borrowConn = do
-    (key, (conn, _)) <- allocate (Pool.takeResource pool) (\(conn, lpool) -> Pool.putResource lpool conn)
-    return (key, conn)
+  borrowConn = poolAlloc pool
+
+  poolAlloc :: MonadResource m => Pool a -> m (ReleaseKey, a)
+  poolAlloc pool = do
+    (key, (res, _lpool)) <- allocate
+      (Pool.takeResource pool)
+      (\(conn, lpool) -> Pool.putResource lpool conn)
+    return (key, res)
 
   tableHash = hash ("coffee_logs" :: String)
 
