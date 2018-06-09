@@ -33,6 +33,7 @@ dependencies:
 - hashable
 - streaming
 - resourcet
+- file-embed
 
 library:
   source-dirs: src

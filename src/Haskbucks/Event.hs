@@ -2,6 +2,7 @@
 {-# LANGUAGE RankNTypes #-}
 {-# LANGUAGE OverloadedStrings #-}
 {-# LANGUAGE ScopedTypeVariables #-}
+{-# LANGUAGE TemplateHaskell #-}
 
 module Haskbucks.Event
 ( EventLog(..)
@@ -35,6 +36,8 @@ import Streaming
 import qualified Streaming.Prelude as S
 import Control.Monad.Trans.Resource
 import Control.Concurrent (threadDelay)
+
+import Data.FileEmbed (embedStringFile)
 
 
 data EventLog ev m = EventLog {
@@ -179,15 +182,8 @@ dropPgEvents pool = do
   Pool.withResource pool $ \c -> do
     void $ Pg.execute_ c cleanup
   where
-  cleanup = "DO $$\n\
-            \  DECLARE r record;\n\
-            \BEGIN\n\
-            \  FOR r IN SELECT table_schema, table_name FROM information_schema.tables\n\
-            \    WHERE table_type = 'BASE TABLE' AND table_schema = 'public' AND table_name = 'coffee_logs'\n\
-            \  LOOP\n\
-            \    EXECUTE 'TRUNCATE TABLE ' || quote_ident(r.table_schema) || '.' || quote_ident(r.table_name);\n\
-            \  END LOOP;\n\
-            \END\n$$;"
+  cleanup :: Pg.Query
+  cleanup = $(embedStringFile "src/Haskbucks/truncate.sql")
 
 runPg :: RIO a -> IO a
 runPg = runResourceT
