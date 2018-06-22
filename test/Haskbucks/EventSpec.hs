@@ -10,6 +10,10 @@ import           Test.Hspec
 import           Haskbucks.Event
 import           Haskbucks.Junk
 import qualified Streaming.Prelude as S
+import qualified Control.Concurrent.MVar as MVar
+import           Control.Concurrent.Async
+
+import           Control.Monad.IO.Class
 
 -- import Debug.Trace
 
@@ -39,10 +43,19 @@ logContract run = do
       pure (h, s)
     s `shouldBe` h
 
-
 spec :: Spec
 spec = parallel $ do
   describe "EventLog" $ do
     describe "Pure" $ around withStateEvents $ logContract runState
     describe "STM" $ around withStmEvents $ logContract runStm
     describe "Pg" $ around withPgFromEnv $ logContract runPg
+  describe "Pg Conc" $ around withPgFromEnv $ do
+    xit "should stream asynchronously" $ \events -> do
+      mvar <- MVar.newEmptyMVar
+      withAsync (runPg $ S.mapM_ (liftIO . MVar.putMVar mvar) $ stream events) $ \_ -> runPg $ do
+        append events "a"
+        a <- liftIO $ MVar.takeMVar mvar
+        liftIO $ a `shouldBe` ("a":: String)
+        append events "b"
+        b <- liftIO $ MVar.takeMVar mvar
+        liftIO $ b `shouldBe` ("b":: String)
