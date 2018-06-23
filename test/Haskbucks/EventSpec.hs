@@ -14,8 +14,14 @@ import qualified Control.Concurrent.MVar as MVar
 import           Control.Concurrent.Async
 
 import           Control.Monad.IO.Class
+import           System.Timeout (timeout)
 
 -- import Debug.Trace
+
+
+-- in us
+timeoutLen :: Int
+timeoutLen = 1000 * 1000
 
 logContract :: Monad m => (forall a . m a -> IO a) -> SpecWith (EventLog String m)
 logContract run = do
@@ -35,7 +41,7 @@ logContract run = do
     ev `shouldBe` ["a", "b"]
 
   it "Stream returns same as snapshot" $ \events -> do
-    (h, s) <- run $ do
+    Just (h, s) <- timeout timeoutLen $ run $ do
       append events "a"
       append events "b"
       h <- snapshot events
@@ -46,16 +52,20 @@ logContract run = do
 concurrentContract :: (Monad m, MonadIO m) => (forall a . m a -> IO a) -> SpecWith (EventLog String m)
 concurrentContract run = do
   it "should stream asynchronously" $ \events -> do
+      putStrLn "Start stream async"
       mvar <- MVar.newEmptyMVar
-      withAsync (run $ S.mapM_ (liftIO . MVar.putMVar mvar) $ stream events) $ \_ -> run $ do
-        append events "a"
-        a <- liftIO $ MVar.takeMVar mvar
-        liftIO $ a `shouldBe` ("a":: String)
-        append events "b"
-        b <- liftIO $ MVar.takeMVar mvar
-        liftIO $ b `shouldBe` ("b":: String)
+      let expected = ["a", "b", "c"] :: [String]
+      evs <- timeout timeoutLen $ withAsync (run $ S.mapM_ (liftIO . MVar.putMVar mvar) $ stream events) $ \_ -> run $ do
+        liftIO $ putStrLn "Put stream async"
+        flip mapM expected $ \ev -> do
+          liftIO $ putStrLn $ "Put stream async " ++ show ev
+          append events ev
+          liftIO $ MVar.takeMVar mvar
+      putStrLn $ "Done stream async" ++ show evs
+      evs `shouldBe` Just expected
+
 spec :: Spec
-spec = parallel $ do
+spec = do
   describe "EventLog" $ do
     describe "Pure" $ around withStateEvents $ logContract runState
     describe "STM" $ around withStmEvents $ logContract runStm
@@ -63,3 +73,4 @@ spec = parallel $ do
   describe "Conc" $ do
     describe "Pg" $ around withPgFromEnv $ concurrentContract runPg
     describe "STM" $ around withStmEvents $ concurrentContract runStm
+    pure ()
