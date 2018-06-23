@@ -43,19 +43,23 @@ logContract run = do
       pure (h, s)
     s `shouldBe` h
 
-spec :: Spec
-spec = parallel $ do
-  describe "EventLog" $ do
-    describe "Pure" $ around withStateEvents $ logContract runState
-    describe "STM" $ around withStmEvents $ logContract runStm
-    describe "Pg" $ around withPgFromEnv $ logContract runPg
-  describe "Pg Conc" $ around withPgFromEnv $ do
-    xit "should stream asynchronously" $ \events -> do
+concurrentContract :: (Monad m, MonadIO m) => (forall a . m a -> IO a) -> SpecWith (EventLog String m)
+concurrentContract run = do
+  it "should stream asynchronously" $ \events -> do
       mvar <- MVar.newEmptyMVar
-      withAsync (runPg $ S.mapM_ (liftIO . MVar.putMVar mvar) $ stream events) $ \_ -> runPg $ do
+      withAsync (run $ S.mapM_ (liftIO . MVar.putMVar mvar) $ stream events) $ \_ -> run $ do
         append events "a"
         a <- liftIO $ MVar.takeMVar mvar
         liftIO $ a `shouldBe` ("a":: String)
         append events "b"
         b <- liftIO $ MVar.takeMVar mvar
         liftIO $ b `shouldBe` ("b":: String)
+spec :: Spec
+spec = parallel $ do
+  describe "EventLog" $ do
+    describe "Pure" $ around withStateEvents $ logContract runState
+    describe "STM" $ around withStmEvents $ logContract runStm
+    describe "Pg" $ around withPgFromEnv $ logContract runPg
+  describe "Conc" $ do
+    describe "Pg" $ around withPgFromEnv $ concurrentContract runPg
+    describe "STM" $ around withStmEvents $ concurrentContract runStm
