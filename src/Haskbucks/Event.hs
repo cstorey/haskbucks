@@ -39,6 +39,15 @@ import Control.Concurrent (threadDelay)
 
 import Data.FileEmbed (embedStringFile)
 
+{-
+
+TODO:
+Qualify namespaces by schema. Can use
+`Database.PostgreSQL.Simple.Types (Identifier)` to pass it in.
+
+... Can we partially evaluate these and prepare them?
+
+-}
 
 data EventLog ev m = EventLog {
   snapshot :: m [ev]
