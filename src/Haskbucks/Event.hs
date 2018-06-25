@@ -136,6 +136,15 @@ newPgPool url = do
   pool <- Pool.createPool (Pg.connectPostgreSQL url) Pg.close 1 60 5
   pure pool
 
+poolAlloc :: MonadResource m => Pool a -> m (ReleaseKey, a)
+poolAlloc pool = do
+  (key, (res, _lpool)) <- allocate
+    (Pool.takeResource pool)
+    (\(conn, lpool) -> Pool.putResource lpool conn)
+  return (key, res)
+
+
+
 newPgEvents :: forall ev . (Typeable ev, JSON.ToJSON ev, JSON.FromJSON ev) => Pool Pg.Connection -> IO (EventLog ev RIO)
 newPgEvents pool = do
   Pool.withResource pool $ setupDb
@@ -176,13 +185,6 @@ newPgEvents pool = do
 
   borrowConn :: RIO (ReleaseKey, Pg.Connection)
   borrowConn = poolAlloc pool
-
-  poolAlloc :: MonadResource m => Pool a -> m (ReleaseKey, a)
-  poolAlloc pool = do
-    (key, (res, _lpool)) <- allocate
-      (Pool.takeResource pool)
-      (\(conn, lpool) -> Pool.putResource lpool conn)
-    return (key, res)
 
   tableHash = hash ("coffee_logs" :: String)
 

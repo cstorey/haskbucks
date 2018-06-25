@@ -76,18 +76,18 @@ smokeTest pause run = do
     res <- withAsync (run $ runABarista events) $ \a -> do
       link a
       timeout 1000 $ run $ runCashier events
-    res `shouldBe` Just (ACoffee)
+    res `shouldBe` Just (Right ACoffee)
 
   where
-  runCashier :: EventLog (OrderId, OrderEvent) m -> m Cup
+  runCashier :: EventLog (OrderId, OrderEvent) m -> m (Either CoffeeError Cup)
   runCashier events = do
     let cashier = pureCashier events
     order <- coOrder cashier
     do
       r <- coTake cashier order
       case r of
-        Left NotReady ->  pause >> runCashier events :: m Cup
-        Right cup -> return cup
+        Left NotReady ->  pause >> runCashier events
+        other -> return other
 
   runABarista :: EventLog (OrderId, OrderEvent) m -> m ()
   runABarista events = do
