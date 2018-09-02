@@ -19,6 +19,17 @@ extra-source-files:
 # common to point users to the README.md file.
 description:         Please see the README on Github at <https://github.com/githubuser/haskbucks#readme>
 
+when:
+- condition: os(darwin)
+  else:
+    ghc-options:
+    - -Werror
+  then:
+    ghc-options:
+    - -Werror
+    - -optP-Wno-nonportable-include-path
+    # The above option works around https://github.com/haskell/cabal/issues/4739
+
 dependencies:
 - base >= 4.7 && < 5
 - mtl
