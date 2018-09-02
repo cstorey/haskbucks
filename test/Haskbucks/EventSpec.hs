@@ -45,23 +45,23 @@ logContract run = do
       append events "a"
       append events "b"
       h <- snapshot events
-      s <- S.toList_ $ S.take 2 $ stream events 
+      s <- S.toList_ $ S.take 2 $ stream events
       pure (h, s)
     s `shouldBe` h
 
 concurrentContract :: (Monad m, MonadIO m) => (forall a . m a -> IO a) -> SpecWith (EventLog String m)
 concurrentContract run = do
   it "should stream asynchronously" $ \events -> do
-      putStrLn "Start stream async"
+      -- putStrLn "Start stream async"
       mvar <- MVar.newEmptyMVar
       let expected = ["a", "b", "c"] :: [String]
       evs <- timeout timeoutLen $ withAsync (run $ S.mapM_ (liftIO . MVar.putMVar mvar) $ stream events) $ \_ -> run $ do
-        liftIO $ putStrLn "Put stream async"
+        -- liftIO $ putStrLn "Put stream async"
         flip mapM expected $ \ev -> do
-          liftIO $ putStrLn $ "Put stream async " ++ show ev
+          -- liftIO $ putStrLn $ "Put stream async " ++ show ev
           append events ev
           liftIO $ MVar.takeMVar mvar
-      putStrLn $ "Done stream async" ++ show evs
+      -- putStrLn $ "Done stream async" ++ show evs
       evs `shouldBe` Just expected
 
 spec :: Spec
